@@ -87,13 +87,79 @@ class JetReconstructionValidation(JetReconstructionNetwork):
         # Compute the sum accuracy of all complete events to act as our target for
         # early stopping, hyperparameter optimization, learning rate scheduling, etc.
         metrics["validation_accuracy"] = metrics[f"jet/accuracy_{num_targets}_of_{num_targets}"]
-
         return metrics
+
+    def compute_validation_losses(self, outputs, batch):
+        '''Compute and log the validation losses.'''
+
+        symmetric_losses, best_indices = self.symmetric_losses(
+            outputs.assignments,
+            outputs.detections,
+            batch.assignment_targets
+        )
+
+        # Construct the newly permuted masks based on the minimal permutation found during NLL loss.
+        permutations = self.event_permutation_tensor[best_indices].T
+        masks = torch.stack([target.mask for target in batch.assignment_targets])
+        masks = torch.gather(masks, 0, permutations)
+
+        # Default unity weight on correct device.
+        weights = torch.ones_like(symmetric_losses)
+
+        # Balance based on the particles present - only used in partial event training
+        if self.balance_particles:
+            class_indices = (masks * self.particle_index_tensor.unsqueeze(1)).sum(0)
+            weights *= self.particle_weights_tensor[class_indices]
+
+        # Balance based on the number of jets in this event
+        if self.balance_jets:
+            weights *= self.jet_weights_tensor[batch.num_vectors]
+
+        # Take the weighted average of the symmetric loss terms.
+        masks = masks.unsqueeze(1)
+        symmetric_losses = (weights * symmetric_losses).sum(-1) / torch.clamp(masks.sum(-1), 1, None)
+        assignment_loss, detection_loss = torch.unbind(symmetric_losses, 1)
+
+        with torch.no_grad():
+            for name, l in zip(self.training_dataset.assignments, assignment_loss):
+                self.log(f"validation_loss/{name}/assignment_loss", l, sync_dist=True)
+
+            for name, l in zip(self.training_dataset.assignments, detection_loss):
+                self.log(f"validation_loss/{name}/detection_loss", l, sync_dist=True)
+
+            if torch.isnan(assignment_loss).any():
+                raise ValueError("Assignment loss has diverged!")
+
+            if torch.isinf(assignment_loss).any():
+                raise ValueError("Assignment targets contain a collision.")
+
+        total_loss = []
+
+        if self.options.assignment_loss_scale > 0:
+            total_loss.append(assignment_loss)
+
+        if self.options.detection_loss_scale > 0:
+            total_loss.append(detection_loss)
+
+        if self.options.kl_loss_scale > 0:
+            total_loss += self.get_kl_loss(outputs.assignments, masks, weights)
+
+        if self.options.regression_loss_scale > 0:
+            total_loss += self.get_regression_loss(outputs.regressions, batch.regression_targets)
+
+        if self.options.classification_loss_scale > 0:
+            total_loss += self.get_classification_loss(outputs.classifications, batch.classification_targets, batch.event_weights)
+
+        total_loss = torch.cat([loss.view(-1) for loss in total_loss])
+
+        self.log("validation_loss/total_loss", total_loss.sum(), sync_dist=True)
+
+        return total_loss.mean()
 
     def validation_step(self, batch, batch_idx) -> Dict[str, np.float32]:
         # Run the base prediction step
-        sources, num_jets, targets, regression_targets, classification_targets = batch
-        jet_predictions, particle_scores, regressions, classifications = self.predict(sources)
+        sources, num_jets, targets, regression_targets, classification_targets, event_weights = batch
+        (jet_predictions, particle_scores, regressions, classifications), outputs = self.predict(sources)
 
         batch_size = num_jets.shape[0]
         num_targets = len(targets)
@@ -148,6 +214,8 @@ class JetReconstructionValidation(JetReconstructionNetwork):
         for name, value in metrics.items():
             if not np.isnan(value):
                 self.log(name, value, sync_dist=True)
+
+        self.compute_validation_losses(outputs, batch)
 
         return metrics
 

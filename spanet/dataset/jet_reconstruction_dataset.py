@@ -30,7 +30,8 @@ TBatch = Tuple[
     Tensor,
     Tuple[Tuple[Tensor, Tensor], ...],
     Dict[str, Tensor],
-    Dict[str, Tensor]
+    Dict[str, Tensor],
+    Tensor
 ]
 
 
@@ -111,6 +112,9 @@ class JetReconstructionDataset(Dataset):
             self.assignments = self.load_assignments(file, limit_index)
             self.regressions, self.regression_types = self.load_regressions(file, limit_index)
             self.classifications = self.load_classifications(file, limit_index)
+
+            # Load the weights for the dataset.
+            self.event_weights = self.load_event_weights(file, limit_index)
 
             # Update size information after loading and limiting dataset.
             self.num_events = limit_index.shape[0]
@@ -273,6 +277,12 @@ class JetReconstructionDataset(Dataset):
 
         return targets
 
+    def load_event_weights(self, hdf5_file: h5py.File, limit_index: np.ndarray) -> Dict[str, Tensor]:
+
+        data = hdf5_file[SpecialKey.Weights]["weight"]
+
+        return torch.from_numpy(data[:][limit_index])
+
     def compute_source_statistics(
             self,
             mean: Optional[Dict[str, Tensor]] = None,
@@ -390,17 +400,21 @@ class JetReconstructionDataset(Dataset):
 
         return vector_class_weights
 
-    def compute_classification_balance(self):
-        def compute_effective_counts(targets):
-            beta = 1 - (1 / targets.shape[0])
-            vector_class_weights = (1 - beta) / (1 - (beta ** torch.bincount(targets)))
+    def compute_classification_balance(self, event_weights: Optional[Tensor] = None):
+        def compute_effective_counts(targets, event_weights=None):
+            if event_weights == None:
+                beta = 1 - (1 / targets.shape[0])
+                vector_class_weights = (1 - beta) / (1 - (beta ** torch.bincount(targets)))
+            else:
+                beta = 1 - (1 / sum(event_weights))
+                vector_class_weights = (1 - beta) / (1 - (beta ** torch.bincount(targets, weights=event_weights)))
             vector_class_weights[torch.isinf(vector_class_weights)] = 0
             vector_class_weights = vector_class_weights.shape[0] * vector_class_weights / vector_class_weights.sum()
 
             return vector_class_weights
 
         return OrderedDict((
-            (key, compute_effective_counts(value))
+            (key, compute_effective_counts(value, event_weights))
             for key, value in self.classifications.items()
             if value is not None
         ))
@@ -470,5 +484,6 @@ class JetReconstructionDataset(Dataset):
             self.num_vectors[item],
             assignments,
             regressions,
-            classifications
+            classifications,
+            self.event_weights[item]
         )

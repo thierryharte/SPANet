@@ -162,6 +162,9 @@ class Options(Namespace):
         # Whether or not to add a weight to classification heads based on target presence.
         self.balance_classifications: bool = False
 
+        #Whether or not to add an event weight to the loss function.
+        self.balance_events: bool = False
+
         # Whether or not to train on partial events in the dataset.
         self.partial_events: bool = False
 
@@ -252,6 +255,19 @@ class Options(Namespace):
         
         # Total number of GPUs to use.
         self.num_gpu: int = 1
+
+        # MDMM parameters
+        self.mdmm_loss_scale: float = 0.0
+
+        # Maximum value, scale factor, and damping factor for the MDMM jet assignment loss.
+        self.mdmm_jet_assignment_max: float = 2.0
+        self.mdmm_jet_assignment_scale: float = 1.0
+        self.mdmm_jet_assignment_damping: float = 1.0
+
+        # Maximum value, scale factor, and damping factor for the MDMM detection loss.
+        self.mdmm_detection_max: float = 2.0
+        self.mdmm_detection_scale: float = 1.0
+        self.mdmm_detection_damping: float = 1.0
 
         # =========================================================================================
         # Miscellaneous Options

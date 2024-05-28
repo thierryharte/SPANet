@@ -3,26 +3,8 @@ from typing import Optional
 from os import getcwd, makedirs, environ
 import shutil
 import json
-import os
 
 import torch
-import random
-
-seed= os.environ.get("SEED", None)
-if seed is not None:
-    # Set the seed for the CPU
-    generator=torch.manual_seed(seed)
-
-    # Set the seed for the CUDA device if available
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-    # # Set the seed for Python's built-in RNG
-    random.seed(seed)
-    print(torch.__version__)
-    print(generator)
-    print(f"Seed {seed} \n")
-
 import pytorch_lightning as pl
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.loggers import TensorBoardLogger

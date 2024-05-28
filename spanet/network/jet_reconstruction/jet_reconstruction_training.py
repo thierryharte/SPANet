@@ -1,4 +1,5 @@
 from typing import Tuple, Dict, List
+import inspect
 
 import numpy as np
 import torch
@@ -6,11 +7,12 @@ from torch import Tensor
 from torch.nn import functional as F
 
 from spanet.options import Options
-from spanet.dataset.types import Batch, Source, AssignmentTargets
+from spanet.dataset.types import SpecialKey, Batch, Source, AssignmentTargets
 from spanet.dataset.regressions import regression_loss
 from spanet.network.jet_reconstruction.jet_reconstruction_network import JetReconstructionNetwork
 from spanet.network.utilities.divergence_losses import assignment_cross_entropy_loss, jensen_shannon_divergence
 
+import mdmm
 
 def numpy_tensor_array(tensor_list):
     output = np.empty(len(tensor_list), dtype=object)
@@ -119,30 +121,34 @@ class JetReconstructionTraining(JetReconstructionNetwork):
         return torch.stack(divergence_loss).mean(0)
         # return -1 * torch.stack(divergence_loss).sum(0) / len(self.training_dataset.unordered_event_transpositions)
 
-    def add_kl_loss(
+    def get_kl_loss(
             self,
-            total_loss: List[Tensor],
             assignments: List[Tensor],
             masks: Tensor,
             weights: Tensor
     ) -> List[Tensor]:
         if len(self.event_info.event_transpositions) == 0:
-            return total_loss
+            return []
 
         # Compute the symmetric loss between all valid pairs of distributions.
         kl_loss = self.symmetric_divergence_loss(assignments, masks)
         kl_loss = (weights * kl_loss).sum() / masks.sum()
 
         with torch.no_grad():
-            self.log("loss/symmetric_loss", kl_loss, sync_dist=True)
+            caller_function = inspect.currentframe().f_back.f_code.co_name
+            if caller_function == "training_step":
+                self.log("loss/symmetric_loss", kl_loss, sync_dist=True)
+            elif caller_function == "compute_validation_losses":
+                self.log("validation_loss/symmetric_loss", kl_loss, sync_dist=True)
+            else:
+                raise ValueError(f"Unknown caller function: {caller_function}")
             if torch.isnan(kl_loss):
                 raise ValueError("Symmetric KL Loss has diverged.")
 
-        return total_loss + [self.options.kl_loss_scale * kl_loss]
+        return [self.options.kl_loss_scale * kl_loss]
 
-    def add_regression_loss(
+    def get_regression_loss(
             self,
-            total_loss: List[Tensor],
             predictions: Dict[str, Tensor],
             targets:  Dict[str, Tensor]
     ) -> List[Tensor]:
@@ -167,17 +173,23 @@ class JetReconstructionTraining(JetReconstructionNetwork):
             current_loss = torch.mean(current_loss)
 
             with torch.no_grad():
-                self.log(f"loss/regression/{key}", current_loss, sync_dist=True)
+                caller_function = inspect.currentframe().f_back.f_code.co_name
+                if caller_function == "training_step":
+                    self.log(f"loss/regression/{key}", current_loss, sync_dist=True)
+                elif caller_function == "compute_validation_losses":
+                    self.log(f"validation_loss/regression/{key}", current_loss, sync_dist=True)
+                else:
+                    raise ValueError(f"Unknown caller function: {caller_function}")
 
             regression_terms.append(self.options.regression_loss_scale * current_loss)
 
-        return total_loss + regression_terms
+        return regression_terms
 
-    def add_classification_loss(
+    def get_classification_loss(
             self,
-            total_loss: List[Tensor],
             predictions: Dict[str, Tensor],
-            targets: Dict[str, Tensor]
+            targets: Dict[str, Tensor],
+            event_weights: Tensor = None,
     ) -> List[Tensor]:
         classification_terms = []
 
@@ -186,19 +198,43 @@ class JetReconstructionTraining(JetReconstructionNetwork):
             current_target = targets[key]
 
             weight = None if not self.balance_classifications else self.classification_weights[key]
-            current_loss = F.cross_entropy(
-                current_prediction,
-                current_target,
-                ignore_index=-1,
-                weight=weight
-            )
+            if self.balance_events:
+                assert event_weights is not None, "Event weights are required for balancing classifications."
+                current_loss = F.cross_entropy(
+                    current_prediction,
+                    current_target,
+                    ignore_index=-1,
+                    weight=weight,
+                    reduction='none'
+                )
+                # Compute the weighted average of the loss
+                current_loss = sum(current_loss * event_weights / sum(event_weights))
+            else:
+                current_loss = F.cross_entropy(
+                    current_prediction,
+                    current_target,
+                    ignore_index=-1,
+                    weight=weight
+                )
 
             classification_terms.append(self.options.classification_loss_scale * current_loss)
 
             with torch.no_grad():
-                self.log(f"loss/classification/{key}", current_loss, sync_dist=True)
+                caller_function = inspect.currentframe().f_back.f_code.co_name
+                if caller_function == "training_step":
+                    self.log(f"loss/classification/{key}", current_loss, sync_dist=True)
+                elif caller_function == "compute_validation_losses":
+                    self.log(f"validation_loss/classification/{key}", current_loss, sync_dist=True)
+                else:
+                    raise ValueError(f"Unknown caller function: {caller_function}")
 
-        return total_loss + classification_terms
+        return classification_terms
+
+    def get_assignment_loss(self, assignment_loss):
+        return assignment_loss.sum()
+
+    def get_detection_loss(self, detection_loss):
+        return detection_loss.sum()
 
     def training_step(self, batch: Batch, batch_nb: int) -> Dict[str, Tensor]:
         # ===================================================================================================
@@ -262,9 +298,6 @@ class JetReconstructionTraining(JetReconstructionNetwork):
         # ---------------------------------------------------------------------------------------------------
         total_loss = []
 
-        if self.options.assignment_loss_scale > 0:
-            total_loss.append(assignment_loss)
-
         if self.options.detection_loss_scale > 0:
             total_loss.append(detection_loss)
 
@@ -272,19 +305,49 @@ class JetReconstructionTraining(JetReconstructionNetwork):
         # Auxiliary loss terms which are added to reconstruction loss for alternative targets.
         # ---------------------------------------------------------------------------------------------------
         if self.options.kl_loss_scale > 0:
-            total_loss = self.add_kl_loss(total_loss, outputs.assignments, masks, weights)
+            kl_loss = self.get_kl_loss(outputs.assignments, masks, weights)
+            total_loss += kl_loss
 
         if self.options.regression_loss_scale > 0:
-            total_loss = self.add_regression_loss(total_loss, outputs.regressions, batch.regression_targets)
+            regression_loss = self.add_regression_loss(outputs.regressions, batch.regression_targets)
+            total_loss += regression_loss
 
         if self.options.classification_loss_scale > 0:
-            total_loss = self.add_classification_loss(total_loss, outputs.classifications, batch.classification_targets)
+            classification_loss = self.get_classification_loss(outputs.classifications, batch.classification_targets, batch.event_weights)
+            total_loss += classification_loss
 
-        # ===================================================================================================
-        # Combine and return the loss
-        # ---------------------------------------------------------------------------------------------------
-        total_loss = torch.cat([loss.view(-1) for loss in total_loss])
+        if self.options.mdmm_loss_scale > 0:
+            if self.options.assignment_loss_scale <= 0:
+                raise ValueError("MDMM loss requires assignment loss to be enabled.")
+            if self.options.classification_loss_scale < 0:
+                raise ValueError("MDMM loss requires classification loss to be enabled.")
 
-        self.log("loss/total_loss", total_loss.sum(), sync_dist=True)
+            total_loss_before_mdmm = torch.cat([loss.view(-1) for loss in total_loss]).mean()
 
-        return total_loss.mean()
+            # Arguments to pass to the loss functions in the MDMM module
+            args_mdmm = [(assignment_loss)]
+            if self.options.detection_loss_scale > 0:
+                args_mdmm.append((detection_loss))
+
+            mdmm_return = self.mdmm_module(
+                total_loss_before_mdmm,
+                args_mdmm
+            )
+            total_loss_after_mdmm = mdmm_return.value
+            total_loss.append(assignment_loss)
+            total_loss = torch.cat([loss.view(-1) for loss in total_loss]).mean()
+            self.log("loss/total_loss", total_loss_after_mdmm, sync_dist=True)
+            self.log("loss/total_loss_no_mdmm", total_loss, sync_dist=True)
+            return total_loss_after_mdmm
+        else:
+            if self.options.assignment_loss_scale > 0:
+                total_loss.append(assignment_loss)
+
+            # ===================================================================================================
+            # Combine and return the loss
+            # ---------------------------------------------------------------------------------------------------
+            total_loss = torch.cat([loss.view(-1) for loss in total_loss])
+
+            self.log("loss/total_loss", total_loss.sum(), sync_dist=True)
+
+            return total_loss.mean()

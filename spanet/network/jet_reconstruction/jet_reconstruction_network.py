@@ -1,3 +1,5 @@
+import inspect
+
 import numpy as np
 import torch
 from torch import nn
@@ -145,12 +147,23 @@ class JetReconstructionNetwork(JetReconstructionBase):
                 for key, value in outputs.classifications.items()
             }
 
-        return Predictions(
-            assignments,
-            detections,
-            regressions,
-            classifications
-        )
+        # If self.predict is called from the validation loop, return the Predictions (Numpy arrays) and Outputs (Tensors)
+        # This is needed in order to use the tensors to compute losses and metrics.
+        caller_function = inspect.currentframe().f_back.f_code.co_name
+        if caller_function == "validation_step":
+            return Predictions(
+                assignments,
+                detections,
+                regressions,
+                classifications
+            ), Outputs(*outputs)
+        else:
+            return Predictions(
+                assignments,
+                detections,
+                regressions,
+                classifications
+            )
 
     def predict_assignments(self, sources: Tuple[Source, ...]) -> np.ndarray:
         # Run the base prediction step

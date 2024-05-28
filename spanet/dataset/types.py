@@ -125,6 +125,7 @@ class SpecialKey(str, Enum):
     Permutations = "PERMUTATIONS"
     Classifications = "CLASSIFICATIONS"
     Embeddings = "EMBEDDINGS"
+    Weights = "WEIGHTS"
 
 
 class Source(NamedTuple):
@@ -154,6 +155,7 @@ class Batch(NamedTuple):
     assignment_targets: Tuple[AssignmentTargets, ...]
     regression_targets: Dict[str, Tensor]
     classification_targets: Dict[str, Tensor]
+    event_weights: Tensor
 
 
 class Outputs(NamedTuple):
