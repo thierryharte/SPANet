@@ -23,6 +23,34 @@ from pytorch_lightning.callbacks import (
 
 from spanet import JetReconstructionModel, Options
 
+import torch
+import random
+import os
+
+# seed= os.environ.get("SEED", None)
+
+# print("seed",seed)
+
+# print(f"Seed: {seed}, type: {type(seed)}")
+
+# if seed is not None:
+#     print("Seed is not None")
+#     # Set the seed for the CPU
+#     generator=torch.manual_seed(seed)
+
+#     # Set the seed for the CUDA device if available
+#     if torch.cuda.is_available():
+#         torch.cuda.manual_seed_all(seed)
+
+#     # # Set the seed for Python's built-in RNG
+#     random.seed(seed)
+#     print(torch.__version__)
+#     print(generator)
+#     print(f"Seed {seed} \n")
+# else:
+#     print("Seed is None")
+
+
 
 def main(
         event_file: str,

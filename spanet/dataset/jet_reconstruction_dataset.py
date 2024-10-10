@@ -406,13 +406,34 @@ class JetReconstructionDataset(Dataset):
                 beta = 1 - (1 / targets.shape[0])
                 vector_class_weights = (1 - beta) / (1 - (beta ** torch.bincount(targets)))
             else:
-                beta = 1 - (1 / sum(event_weights))
+                beta = 1 - (1 / event_weights.sum())
                 vector_class_weights = (1 - beta) / (1 - (beta ** torch.bincount(targets, weights=event_weights)))
+                print(vector_class_weights)
             vector_class_weights[torch.isinf(vector_class_weights)] = 0
             vector_class_weights = vector_class_weights.shape[0] * vector_class_weights / vector_class_weights.sum()
-
+            
+            print("targets",len(targets))
+            print("signal targets",len(targets[targets==1]))
+            print("bckg targets",len(targets[targets==0]))
+            
+            signal_event_weights= event_weights[targets==1]
+            bckg_event_weights=event_weights[targets==0]
+            
+            total_signal_weight= signal_event_weights.sum() * vector_class_weights[1]
+            total_bckg_weight= bckg_event_weights.sum() * vector_class_weights[0]
+            
+            print("Sum of signal Event weights", signal_event_weights.sum())
+            print("Sum of background Event weights", bckg_event_weights.sum())
+            
+            print("Sum of signal Class weights", vector_class_weights[1].sum())
+            print("Sum of background Class weights", vector_class_weights[0].sum())
+            
+            print("total signal weights",total_signal_weight)
+            print("total background weights",total_bckg_weight)
+            
+            
             return vector_class_weights
-
+            
         return OrderedDict((
             (key, compute_effective_counts(value, event_weights))
             for key, value in self.classifications.items()

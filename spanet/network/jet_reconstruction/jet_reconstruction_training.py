@@ -196,8 +196,43 @@ class JetReconstructionTraining(JetReconstructionNetwork):
         for key in targets:
             current_prediction = predictions[key]
             current_target = targets[key]
+            
+            print("targets",targets)
+            print("targets keys",targets.keys())
+            
+            print("all targets",len(targets[key]))
+            print("signal targets",len(targets[key][targets[key]==1]))
+            print("bckg targets",len(targets[key][targets[key]==0]))
 
             weight = None if not self.balance_classifications else self.classification_weights[key]
+            
+            print("weights", weight)
+
+
+            
+            # signal_class_weights= weight[[targets[key]==1]]
+            # print("signal class weights", signal_class_weights)
+            # bckg_class_weights=weight[targets[key]==0]
+            # print("bckg class weights", bckg_class_weights)
+        
+            # print("event weights", len(event_weights))
+            # print("sum_evenet_weights",sum(event_weights))
+            
+            # signal_event_weights= event_weights[targets[key]==1]
+            # print("signal event weights",signal_event_weights)
+            # bckg_event_weights=event_weights[targets[key]==0]
+            # print("bckg event weights", bckg_event_weights)
+            
+            print("signal class weight", weight[1])
+            # print("signal event weight", signal_event_weights)
+            # print("signal weight", signal_event_weights * weight[1])
+            
+            print("bckg class weight", weight[0])
+            # print("bckg event wieght", bckg_event_weights [:2])
+            # total_weight_bckg= bckg_event_weights * weight[0] 
+            # print("total bckg weight", total_weight_bckg [:2])
+        
+            
             if self.balance_events:
                 assert event_weights is not None, "Event weights are required for balancing classifications."
                 current_loss = F.cross_entropy(
