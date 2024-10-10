@@ -8,8 +8,12 @@ import os
 import torch
 import random
 
-seed= os.environ.get("SEED", None)
-if seed is not None:
+seed= int(os.environ.get("SEED", -1))
+
+print(f"Seed: {seed}, type: {type(seed)}")
+
+if seed != -1:
+    print("Seed is not None")
     # Set the seed for the CPU
     generator=torch.manual_seed(seed)
 
@@ -22,6 +26,9 @@ if seed is not None:
     print(torch.__version__)
     print(generator)
     print(f"Seed {seed} \n")
+else:
+    print("Seed is None")
+
 
 import pytorch_lightning as pl
 from pytorch_lightning.profilers import PyTorchProfiler
@@ -241,13 +248,13 @@ if __name__ == '__main__':
 
     parser.add_argument("-e", "--epochs", type=int, default=None,
                         help="Override number of epochs to train for")
-    
+
     parser.add_argument("-t", "--time_limit", type=str, default=None,
                         help="Time limit for training, in the format DD:HH:MM:SS.")
 
     parser.add_argument("-g", "--gpus", type=int, default=None,
                         help="Override GPU count in hyperparameters.")
-    
+
     parser.add_argument("-b", "--batch_size", type=int, default=None,
                         help="Override batch size in hyperparameters.")
 
