@@ -27,28 +27,28 @@ import torch
 import random
 import os
 
-# seed= os.environ.get("SEED", None)
+seed= int(os.environ.get("SEED", -1))
 
-# print("seed",seed)
+print("seed",seed)
 
-# print(f"Seed: {seed}, type: {type(seed)}")
+print(f"Seed: {seed}, type: {type(seed)}")
 
-# if seed is not None:
-#     print("Seed is not None")
-#     # Set the seed for the CPU
-#     generator=torch.manual_seed(seed)
+if seed != -1:
+    print("Seed is not None")
+    # Set the seed for the CPU
+    generator=torch.manual_seed(seed)
 
-#     # Set the seed for the CUDA device if available
-#     if torch.cuda.is_available():
-#         torch.cuda.manual_seed_all(seed)
+    # Set the seed for the CUDA device if available
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
-#     # # Set the seed for Python's built-in RNG
-#     random.seed(seed)
-#     print(torch.__version__)
-#     print(generator)
-#     print(f"Seed {seed} \n")
-# else:
-#     print("Seed is None")
+    # # Set the seed for Python's built-in RNG
+    random.seed(seed)
+    print(torch.__version__)
+    print(generator)
+    print(f"Seed {seed} \n")
+else:
+    print("Seed is None")
 
 
 
@@ -251,13 +251,13 @@ if __name__ == '__main__':
 
     parser.add_argument("-e", "--epochs", type=int, default=None,
                         help="Override number of epochs to train for")
-    
+
     parser.add_argument("-t", "--time_limit", type=str, default=None,
                         help="Time limit for training, in the format DD:HH:MM:SS.")
 
     parser.add_argument("-g", "--gpus", type=int, default=None,
                         help="Override GPU count in hyperparameters.")
-    
+
     parser.add_argument("-b", "--batch_size", type=int, default=None,
                         help="Override batch size in hyperparameters.")
 
