@@ -2,12 +2,38 @@
 # Requires
 # pip install "ray[tune]==2.5.1" hyperopt
 
-import os
 import math
 
 from typing import Optional
 from argparse import ArgumentParser
 import json
+
+import torch
+import random
+import os
+
+seed= int(os.environ.get("SEED", -1))
+
+print("seed",seed)
+
+print(f"Seed: {seed}, type: {type(seed)}")
+
+if seed != -1:
+    print("Seed is not None")
+    # Set the seed for the CPU
+    generator=torch.manual_seed(seed)
+
+    # Set the seed for the CUDA device if available
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    # # Set the seed for Python's built-in RNG
+    random.seed(seed)
+    print(torch.__version__)
+    print(generator)
+    print(f"Seed {seed} \n")
+else:
+    print("Seed is None")
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -95,22 +121,22 @@ def spanet_trial(config, base_options_file: str, home_dir: str, num_epochs=10, g
 
 
 def tune_spanet(
-    base_options_file: str, 
+    base_options_file: str,
     search_space_file: Optional[str] = None,
-    num_trials: int = 10, 
-    num_epochs: int = 10, 
+    num_trials: int = 10,
+    num_epochs: int = 10,
     gpus_per_trial: int = 0,
     name: str = "spanet_asha_tune",
     log_dir: str = "spanet_output"
 ):
-    # Load the search space. 
+    # Load the search space.
     # This seems to be the best way to load arbitrary tune search spaces.
     # Not great due to the dynamic eval but ray doesnt have a config spec for search spaces.
     config = DEFAULT_CONFIG
     if search_space_file is not None:
         with open(search_space_file, 'r') as file:
             search_space = json.load(file)
-        
+
         config = {
             key: eval(value) if isinstance(value, str) and ("tune." in value) else value
             for key, value in search_space.items()
@@ -197,4 +223,3 @@ if __name__ == '__main__':
         help="The sub-directory to create for this run.")
 
     tune_spanet(**parser.parse_args().__dict__)
-

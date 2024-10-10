@@ -5,25 +5,6 @@ import shutil
 import json
 
 import torch
-import pytorch_lightning as pl
-from pytorch_lightning.profilers import PyTorchProfiler
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.callbacks.progress.rich_progress import _RICH_AVAILABLE
-from pytorch_lightning.loggers.wandb import _WANDB_AVAILABLE, WandbLogger
-
-from pytorch_lightning.callbacks import (
-    LearningRateMonitor,
-    ModelCheckpoint,
-    RichProgressBar,
-    RichModelSummary,
-    DeviceStatsMonitor,
-    ModelSummary,
-    TQDMProgressBar
-)
-
-from spanet import JetReconstructionModel, Options
-
-import torch
 import random
 import os
 
@@ -49,6 +30,24 @@ if seed != -1:
     print(f"Seed {seed} \n")
 else:
     print("Seed is None")
+    
+import pytorch_lightning as pl
+from pytorch_lightning.profilers import PyTorchProfiler
+from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.callbacks.progress.rich_progress import _RICH_AVAILABLE
+from pytorch_lightning.loggers.wandb import _WANDB_AVAILABLE, WandbLogger
+
+from pytorch_lightning.callbacks import (
+    LearningRateMonitor,
+    ModelCheckpoint,
+    RichProgressBar,
+    RichModelSummary,
+    DeviceStatsMonitor,
+    ModelSummary,
+    TQDMProgressBar
+)
+
+from spanet import JetReconstructionModel, Options
 
 
 
