@@ -8,6 +8,24 @@ import math
 from typing import Optional
 from argparse import ArgumentParser
 import json
+import torch
+import random
+
+seed= os.environ.get("SEED", None)
+if seed is not None:
+    # Set the seed for the CPU
+    generator=torch.manual_seed(seed)
+
+    # Set the seed for the CUDA device if available
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    # # Set the seed for Python's built-in RNG
+    random.seed(seed)
+    print(torch.__version__)
+    print(generator)
+    print(f"Seed {seed} \n")
+
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -163,7 +181,7 @@ def tune_spanet(
 if __name__ == '__main__':
     parser = ArgumentParser()
 
-    parser.add_argument(
+    parser.add_argument( #can i add an -o here?
         "base_options_file", type=str,
         help="Base options file to load and adjust with tuning parameters."
     )
