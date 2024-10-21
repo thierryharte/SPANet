@@ -55,6 +55,7 @@ def main(
         validation_file: str,
         options_file: Optional[str],
         checkpoint: Optional[str],
+        metric: Optional[str],
         state_dict: Optional[str],
         freeze_state_dict: bool,
 
@@ -164,10 +165,11 @@ def main(
     # )
 
     # Create the checkpoint for this training run. We will save the best validation networks based on 'accuracy'
+    metric = metric if metric is not None else 'validation_accuracy' 
     callbacks = [
         ModelCheckpoint(
             verbose=options.verbose_output,
-            monitor='validation_accuracy',
+            monitor=metric,
             save_top_k=3,
             mode='max',
             save_last=True
@@ -232,6 +234,9 @@ if __name__ == '__main__':
     parser.add_argument("-cf", "--checkpoint", type=str, default=None,
                         help="Optional checkpoint to load the training state from. "
                              "Fully restores model weights and optimizer state.")
+
+    parser.add_argument("-mt", "--metric", type=str, default=None,
+                        help="Optional metric by which the checkpoints are chosen")
 
     parser.add_argument("-sf", "--state_dict", type=str, default=None,
                         help="Load from checkpoint but only the model weights. "
