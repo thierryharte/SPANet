@@ -34,6 +34,15 @@ def tree_concatenate(trees):
     results = [np.concatenate(l) for l in zip(*leaves)]
     return tree_unflatten(results, tree_spec)
 
+def get_score(check_dict, file):
+    print(file)
+    if "last" in file: #score of 0 for last means, if there is any better training, this will be the one taken.
+        check_dict[0] = file
+        return check_dict
+    parts = file.split('-')
+    score = float(f"{parts[1].split('.')[0]}.{parts[1].split('.')[1]}") #rather some hack to get the score out of the filename
+    check_dict[score] = file
+    return check_dict
 
 def load_model(
     log_directory: str,
@@ -46,9 +55,16 @@ def load_model(
 ) -> JetReconstructionModel:
     # Load the best-performing checkpoint on validation data
     if checkpoint is None:
-        checkpoint = sorted(glob(f"{log_directory}/checkpoints/epoch*"))[-1]
-        print(f"Loading: {checkpoint}")
+        checkpoints = sorted(glob(f"{log_directory}/checkpoints/*"))
+        #Get maximal value for the checkpoint score by disecting the name and creating a dictionary of score to filename
+        #Then chose the dictionary key with the maximum value (the maximal score) and take the corresponding file.
+        check_dict = {}
+        for point in checkpoints:
+            check_dict=get_score(check_dict,point)
+        maxval = max(check_dict.keys())
+        checkpoint = check_dict[maxval]
 
+    print(f"Loading: {checkpoint}")
     checkpoint = torch.load(checkpoint, map_location='cpu')
     checkpoint = checkpoint["state_dict"]
     if fp16:
