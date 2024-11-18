@@ -165,13 +165,13 @@ def main(
     # )
 
     # Create the checkpoint for this training run. We will save the best validation networks based on 'accuracy'
-    metric = metric if metric is not None else 'CLASSIFICATION/EVENT/signal_accuracy'
+    metric = metric if metric is not None else 'validation_accuracy'
     print(metric)
     callbacks = [
         ModelCheckpoint(
             verbose=options.verbose_output,
             monitor=metric,
-            filename='{epoch}-{CLASSIFICATION/EVENT/signal_accuracy:.3f}',
+            filename=f'{{epoch}}-{{{metric}:.3f}}',
             auto_insert_metric_name=False,
             save_top_k=3,
             mode='max',
@@ -238,7 +238,7 @@ if __name__ == '__main__':
                         help="Optional checkpoint to load the training state from. "
                              "Fully restores model weights and optimizer state.")
 
-    parser.add_argument("-mt", "--metric", type=str, default=None,
+    parser.add_argument("-mt", "--metric", type=str, default='validation_accuracy',
                         help="Optional metric by which the checkpoints are chosen")
 
     parser.add_argument("-sf", "--state_dict", type=str, default=None,
