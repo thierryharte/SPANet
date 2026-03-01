@@ -231,7 +231,11 @@ class JetReconstructionValidation(JetReconstructionNetwork):
 
         for key in classifications:
             accuracy = (classifications[key] == classification_targets[key])
+            accuracy_0 = (classifications[key][classification_targets[key] == 0] == classification_targets[key][classification_targets[key] == 0])
+            accuracy_1 = (classifications[key][classification_targets[key] == 1] == classification_targets[key][classification_targets[key] == 1])
             self.log(f"CLASSIFICATION/{key}_accuracy", accuracy.mean(), sync_dist=True)
+            self.log(f"CLASSIFICATION/{key}_accuracy_target0", accuracy_0.mean(), sync_dist=True)
+            self.log(f"CLASSIFICATION/{key}_accuracy_target1", accuracy_1.mean(), sync_dist=True)
 
         for name, value in metrics.items():
             if not np.isnan(value):
