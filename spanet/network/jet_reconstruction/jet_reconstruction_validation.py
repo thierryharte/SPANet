@@ -236,6 +236,21 @@ class JetReconstructionValidation(JetReconstructionNetwork):
             self.log(f"CLASSIFICATION/{key}_accuracy", accuracy.mean(), sync_dist=True)
             self.log(f"CLASSIFICATION/{key}_accuracy_target0", accuracy_0.mean(), sync_dist=True)
             self.log(f"CLASSIFICATION/{key}_accuracy_target1", accuracy_1.mean(), sync_dist=True)
+            batch_weights = batch.event_weights.cpu().numpy()
+            accuracy_eventw = accuracy * batch_weights
+            accuracy_eventw_0 = accuracy_0 * batch_weights[classification_targets[key] == 0]
+            accuracy_eventw_1 = accuracy_1 * batch_weights[classification_targets[key] == 1]
+            self.log(f"CLASSIFICATION/{key}_accuracy_event_weight", accuracy_eventw.sum() / batch_weights.sum(), sync_dist=True)
+            self.log(f"CLASSIFICATION/{key}_accuracy_event_weight_target0", accuracy_eventw_0.sum() / batch_weights[classification_targets[key] == 0].sum(), sync_dist=True)
+            self.log(f"CLASSIFICATION/{key}_accuracy_event_weight_target1", accuracy_eventw_1.sum() / batch_weights[classification_targets[key] == 1].sum(), sync_dist=True)
+            class_weights_per_sample = self.classification_weights[key][classification_targets[key]].cpu().numpy()
+            combined_weights = batch_weights * class_weights_per_sample
+            accuracy_totw = accuracy * combined_weights
+            accuracy_totw_0 = accuracy_0 * combined_weights[classification_targets[key] == 0]
+            accuracy_totw_1 = accuracy_1 * combined_weights[classification_targets[key] == 1]
+            self.log(f"CLASSIFICATION/{key}_accuracy_event_and_class_weight", accuracy.sum() / combined_weights.sum(), sync_dist=True)
+            self.log(f"CLASSIFICATION/{key}_accuracy_event_and_class_weight_target0", accuracy_0.sum() / combined_weights[classification_targets[key] == 0].sum(), sync_dist=True)
+            self.log(f"CLASSIFICATION/{key}_accuracy_event_and_class_weight_target1", accuracy_1.sum() / combined_weights[classification_targets[key] == 1].sum(), sync_dist=True)
 
         for name, value in metrics.items():
             if not np.isnan(value):

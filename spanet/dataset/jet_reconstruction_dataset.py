@@ -411,7 +411,7 @@ class JetReconstructionDataset(Dataset):
 
         return vector_class_weights
 
-    def compute_classification_balance(self, event_weights: Optional[Tensor] = None, signal_class_weight_factor: Optional[float] = 6.0):
+    def compute_classification_balance(self, event_weights: Optional[Tensor] = None, signal_class_weight_factor: Optional[float] = 1.0):
         def compute_effective_counts(targets, event_weights=None):
             if event_weights == None:
                 beta = 1 - (1 / targets.shape[0])
@@ -423,6 +423,7 @@ class JetReconstructionDataset(Dataset):
             vector_class_weights[torch.isinf(vector_class_weights)] = 0
             vector_class_weights = vector_class_weights.shape[0] * vector_class_weights / vector_class_weights.sum()
             vector_class_weights[1] *= signal_class_weight_factor
+            # vector_class_weights = 1/torch.bincount(targets, weights=event_weights)
 
             # print("targets",len(targets))
             # print("signal targets",len(targets[targets==1]))
